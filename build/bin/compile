@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+
+app_root=/app
+app_temp=/src
+release_file=$app_root/tmp/heroku-buildpack-release-step.yml
+
+echo "-----> Checking for git repo"
+
+# Copy the source files to the application directory
+if [[ -d $app_temp/.git ]]; then
+  echo "       .git repo found cloning branch ${GIT_BRANCH:-master}"
+  git clone --depth=1 --branch ${GIT_BRANCH:-master} file://$app_temp $app_root
+else
+  echo "       no git repo found, initializing..."
+  mv $app_temp $app_root
+  # and make it a git repo
+  cd $app_root
+  git init
+  echo "       adding source files"
+  git add -f .
+  echo "       committing"
+  git commit --author="Buildpack <buildpack@example.com>" -m "Commit for build"
+fi
+
+# remove the source directory
+rm -rf $app_temp
+
+# run the buildpack compiler
+echo "-----> Running buildpack compile"
+/buildpack/bin/compile $app_root /tmp
+echo "-----> Installing Foreman Procfile runner"
+$app_root/bin/gem install foreman -n $app_root/bin --no-rdoc --no-ri
+
+# create a default Procfile if one doesn't exist
+if [[ ! -f "$app_root/Procfile" ]]; then
+  echo "-----> Creating default Procfile"
+  ruby -e "require 'yaml';pt = (YAML.load_file('$release_file')['default_process_types'] || {}).map {|k,v| [k,v].join(': ')}; puts pt" > $app_root/Procfile
+fi
+
+# create helper shell scripts
+## execute a command in the application environment
+cat > /exec <<EOF
+#!/bin/bash
+export HOME=/app
+for file in $app_root/.profile.d/*; do source \$file; done
+hash -r
+cd $app_root
+"\$@"
+EOF
+
+chmod +x /exec
+
+## start a Procfile process
+cat > /start <<EOF
+#!/bin/bash
+/exec foreman start \$@
+EOF
+
+chmod +x /start

@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# Installs all dependencies and prepares the environment to run the buildpack
+#
+
+# install system packages
+apt-get update
+xargs apt-get install -y --force-yes < /build/resources/packages.txt
+
+# install oracle instant client
+mkdir -p /opt/oracle
+cd /opt/oracle
+find /build/resources -name "instantclient*.zip" -type f -exec unzip -o '{}' \;
+cd instantclient_12_1
+ln -s libclntsh.so.12.1 libclntsh.so
+echo $PWD > /etc/ld.so.conf.d/oracle-instantclient.conf
+ldconfig
+
+# buildpack configuration
+echo "gem: --no-rdoc --no-ri" > /etc/gemrc
+gem install bundler
+
+# buildpack installation
+mkdir -p /buildpack
+git clone --depth=1 `cat /build/resources/buildpack.url` /buildpack

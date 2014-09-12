@@ -1,0 +1,10 @@
+build-essential
+curl
+git
+unzip
+ruby-dev
+libaio-dev
+libevent-dev
+libssl-dev
+libssl0.9.8
+zlib1g-dev
